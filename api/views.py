@@ -17,11 +17,15 @@ class UserModelViewSet(viewsets.ModelViewSet):
     queryset = ApiUser.objects.all()
     # по умолчанию ModelViewSet реализует все основные методы - GET POST итд
     # мы используем не все методы
-    http_method_names = ["post", "path", "get"]
+    # http_method_names = ["post", "path", "get"]
+    http_method_names = ["post", "get"]
     # Укажем сериализатор, который делали ранее.
     # Он будет использоваться для валидации данных фронтенда,
     # обновления и создания пользователя
     serializer_class = UserSerializer
+
+    authentication_classes = []
+    permissions_classes = []
 
 
 # Добавляем остальные
