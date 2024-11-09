@@ -1,0 +1,34 @@
+---В консоли исполняем команду для запуска shell с контекстом django
+
+python.exe .\manage.py shell
+
+---Импортируем нужные классы
+
+from api.models import Hotel
+from api.serializers import HotelSerializer
+
+---Созадём отель
+q = HotelSerializer(Hotel.objects.create(name="Test Hotel 1"))
+
+---проверяем отображение данных
+
+q.data
+ответ:
+{'id': 1, 'name': 'Test Hotel 1'}
+
+---получение отеля когда уже есть в бд
+
+s = HotelSerializer(Hotel.objects.first())
+
+---проверка валидации данных (макс число символов)
+с параметром data это десериализация
+
+s = HotelSerializer(data={"name":"a"*129})
+s.is_valid()
+s.is_valid(raise_exception=True)
+
+получаем False и/или ошибку
+
+
+
+
