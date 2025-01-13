@@ -1,0 +1,182 @@
+
+Queryset — “Lazy” объект
+Изначально Queryset содержит лишь данные о будущем запросе
+Запрос производится непосредственно в момент попытки доступа к этим данным
+
+=== На этом этапе лишь формируется будущий запрос
+cities = City.objects.filter(name__istartswith='j')
+=== Queryset можно уточнять
+cities = cities.filter(id__gte=20)
+=== А вот здесь Django физически пойдет в БД за данными
+for city in cities:
+    print(city.name)
+
+===
+
+Кэширование в Queryset
+
+=== После того как данные получены, они кэшируются внутри самого Queryset-а
+=== Здесь создаётся queryset
+cities = City.objects.all()
+=== Здесь данные физически запрашиваются из БД
+for city in cities:
+    print(city.name)
+=== При повторном доступе к данным новый запрос в БД не производится
+for city in cities:
+    print(city.name)
+===
+
+=== Так делать не стоит
+for city in City.objects.all():
+    print(city.id)
+for city in City.objects.all():
+    print(city.name)
+
+=== Так лучше
+cities = City.objects.all()
+for city in cities:
+    print(city.id)
+for city in cities:
+    print(city.name
+===
+
+.values() Если не нужно кэшировать все данные
+
+===
+for city in City.objects.all():
+    print(city.name)
+=== Будет произведен запрос:
+===SELECT id, name, country FROM people_city;
+=== Если нам не нужны все поля, экономнее это указать явно:
+for city in City.objects.values('id', 'name'):
+    print(city['id'], city['name'])
+===SELECT id, name FROM people_city;
+=== Но вернутся объекты типа dict, не City!
+{'id': 1, 'name': 'Paris'}
+
+.values_list()
+
+=== Возвращает Touple с порядком полей как в указанных параметрах
+=== flat позволяет просто получить список знаений
+for city_id, city_name in City.objects.values_list('id', 'name'):
+    print(city_id, city_name)
+Вернутся объекты tuple
+(1, 'Paris')
+city_ids = City.objects.values_list('id', flat=True)
+Вернется плоский лист айдишников
+[1, 2, 3, 10 …]
+===
+
+Bulk operations: create
+
+=== создаём много строк в таблице
+city_names = ['Paris', 'Bourges', 'Metz', …]
+for city_name in city_names:
+    city = City(name=city_name)
+    city.save()
+INSERT INTO people_city …
+INSERT INTO people_city …
+INSERT INTO people_city …
+…
+cities = [City(name=x) for x in city_names]
+City.objects.bulk_create(cities)
+===
+
+Bulk operations: update
+
+===
+cities = []
+for city in City.objects.all():
+    city.name = city.name.title()
+    cities.append(city)
+City.objects.bulk_update(cities, fields=['name'])
+===
+
+Решаем проблему N+1
+
+
+=== N+1 SQL-запросов
+citizens = Citizen.objects.all()
+for c in citizens:
+    print(c.full_name, c.city.name, c.city.country.name)
+
+=== 3 SQL-запроса (.prefetch_related())
+citizens = Citizen.objects.all().prefetch_related('city', 'city__country')
+for c in citizens:
+    print(c.full_name, c.city.name, c.city.country.name)
+===
+
+Инструменты диагностики
+
+=== Queryset.query
+citizens = Citizen.objects.filter(id__gte=100, city__country__name='France')
+print(citizens.query)
+    SELECT "id", "people_citizen"."full_name", …
+    FROM "people_citizen"
+    INNER JOIN "people_city" ON ("people_citizen"."city_id" = "people_city"."id")
+    INNER JOIN "people_country" ON ("people_city"."country_id" = "people_country"."id")
+    WHERE ("people_country"."name" = France AND "people_citizen"."id" >= 100)
+
+=== Connections
+from django.db import connection
+from django.db import reset_queries
+for c in Citizen.objects.all()[:10]:
+    print(c.full_name, c.city.name, c.city.country.name)
+print(connection.queries)
+...
+ {'sql': 'SELECT "id", "name" FROM "people_country" WHERE "id" = 1 LIMIT 21',
+  'time': '0.000'}]
+len(connection.queries) - > 21
+reset_queries()
+
+=== Django debug toolbar - веб формат
+
+Объект Q
+может использоваться как одно из условйи фильтрации в выборке
+=== ничего не вернёт
+from django.db.models import Q
+citizens = Citizen.objects.filter(
+    city__country__name='France',
+    city__name='Новосибирск',
+)
+=== Q используется как ИЛИ
+citizens = Citizen.objects.filter(
+    Q(city__country__name='France') |
+    Q(city__name='Новосибирск'),
+)
+===
+
+Constraints - можно задавать constraints по группе полей
+
+=== уникальность имени
+class City(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    country = models.ForeignKey('people.Country', …)
+=== Уникальная комбинация - unique_together
+class City(models.Model):
+    name = models.CharField(max_length=64)
+    country = models.ForeignKey('people.Country', …)
+    class Meta:
+        unique_together = ('name', 'country')
+===
+
+Атомарные запросы
+
+=== Все, что находится в блоке with будет выполнено в рамках одной транзакции
+=== либо не будет выполнено совсем
+from django.db import transaction
+with transaction.atomic():
+    City.objects.delete()
+    City.objects.create(name='Paris')
+    raise ValueError
+
+
+
+
+
+
+
+
+
+
+

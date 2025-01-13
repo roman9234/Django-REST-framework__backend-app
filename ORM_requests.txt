@@ -1,0 +1,201 @@
+Модель, о которой мы говорим — это класс, который
+наследуется от django.db.models.Model, и берет
+на себя несколько ролей:
+
+Описывает SQLтаблицу БД
+Реализует паттерн “Active Record” - название позволяет передавать данные между схожими классами
+Является интерфейсом для манипуляций с данными
+
+---- Жизненный цикл модели ----
+меняем  модель
+создаём файл миграции
+применяем миграцию
+
+---- особенности ----
+можно задавать параметр имени миграции через -n
+./manage.py makemigrations people -n add_country_city_citizen
+можно выбирать для какого приложения применится миграция
+manage.py migraate api
+либо посмотреть в какие SQL команды преобразуется набор миграций
+manage.py sqlmigraate api 0001
+
+Откат миграции:
+manage.py showmigrations api
+manage.py migrte people 0001
+
+---- Манипуляции с данными ----
+
+Создание одной записи
+=== инициализация класса, задание параметро
+france = Country()
+france.name = 'France'
+france.save() - соранение в БД
+print(france.pk) - печать ключа
+=== способ создания с параметрами
+paris = City(name='Paris')
+paris.country = france
+paris.save()
+=== Способ создания через .objects - менеджер
+=== менеджер есть у каждой модели Django. Не нужно вызывать метод save
+person = Citizen.objects.create(full_name='Michelle Augustin', city=paris)
+print(person.pk)
+===
+
+Чтение записи
+
+=== GET получает 1 строку по какому-нибудь полю
+country = Country.objects.get(pk=1)
+print(country.name)
+===
+country = Country.objects.get(name='France')
+print(country.name)
+=== Ошибки:
+DoesNotExist: Country matching query does not exist.
+MultipleObjectsReturned: get() returned more than one Country
+===
+
+Обновление записей
+
+===
+country = Country.objects.get(pk=1)
+print(country.name) - > France
+country.name = 'Estonia'
+country.save()
+print(Country.objects.get(pk=1).name) - > Estonia
+===
+
+Удаление записи
+
+===
+country = Country.objects.get(pk=1)
+print(country.name) - > Estonia
+country.delete()
+Country.objects.get(pk=1) - > DoesNotExist: Country matching query does not exist.
+===
+
+Что такое Queryset
+
+=== Queryset нужен для выборки набора объектов
+countries = Country.objects.all()
+type(countries) - > django.db.models.query.Queryset
+for country in countries:
+    print(country.pk, country.name) - >
+
+1 Estonia
+2 Austria
+3 Spain
+===
+
+=== Можно обращаться к данным из смежных таблиц
+citizen = Citizen.objects.get(pk=1)
+type(citizen.city) - > people.models.City
+print(citizen.city.name) - > Paris
+print(citizen.city.country.name) - > France
+=== через Queryset
+=== внимание! на каждый запрос через субтаблицы, выполняется запрос к БД (проблема "N+1")
+citizens = Citizen.objects.all()
+for c in citizens:
+    print(c.full_name, c.city.name, c.city.country.name, sep=', ') - >
+
+Michelle Augustin, Paris, France
+Antoine Blanc, Bourges, France
+Louis Dumont, Metz, France
+===
+
+Фильтрация
+
+===
+france = Country.objects.get(name='France')
+french_cities = City.objects.filter(country=france)
+for city in cities:
+    print(city.pk, city.name)
+
+1 Paris
+2 Bourges
+3 Metz
+=== Фильтрация через фильтр по смежной таблице
+=== только города из франции
+cities = City.objects.filter(country__name='France')
+for city in cities:
+    print(city.pk, city.name)
+
+1 Paris
+2 Bourges
+3 Metz
+=== Ещё более глубокий Lookup (Lookup - аргумент который передаём в фильтр)
+citizens = Citizens.objects.filter(city__country__name='France')
+for citizen in citizens:
+    print(citizen.pk, citizen.full_name)
+
+1 Michelle Augustin
+2 Antoine Blanc
+3 Louis Dumont
+===
+
+Продвинутые Лукапы
+
+===
+Citу.objects.filter(id=1)
+Citу.objects.filter(id__gt=1)               # А ещё gte, lt, lte
+Citу.objects.filter(id__in=[1, 4])
+Citу.objects.filter(country__isnull=True)   # А еще можно False
+Citу.objects.filter(name__startswith='Pa')  # А еще istartswith, endswith
+Citу.objects.filter(name__contains='ari')   # А еще icontains
+Citу.objects.filter(created_at__year=2022)  # Если есть дата, можно выбрать например только год
+===
+
+Сортировка
+
+=== - если сортировка в обратном порядке
+cities = City.objects.all().order_by('name')
+cities = City.objects.all().order_by('-name')
+cities = City.objects.all().order_by('country__name')
+===
+
+Удаление данных
+
+=== Удаление данных по текущим условиями Queryset-а
+City.objects.filter(name__istartswith='j').delete() - > (303, {'people.Citizen': 300, 'people.City': 3})
+===
+
+Слайсы
+
+=== Получаем только нужный диапазон (LIMIT/OFFSET)
+cities = City.objects.filter(country__name='France').order_by('name')[:3]
+for city in cities:
+    print(city.name)
+
+Abbeville
+Agde
+Agen
+===
+
+.first() и .last()
+
+=== меньше кода чем в слайсе [:1]
+city = City.objects.filter(country_id=1).order_by('name').first()
+===
+
+ПОЛЕЗНЫЕ ФУНКЦИИ
+
+=== .count() запрашивает количество объектов в БД по текущим условиям Queryset-а
+City.objects.filter(country_id=1).count() - > 182
+=== .annotate() добавляет в объекты Queryset-а дополнительную информацию
+from django.db.models import Count
+for city in City.objects.all().annotate(population=Count('citizens')):
+    print(city.name, city.population, sep=', ')
+
+Leefort, 100
+Lake Tina, 84
+New David, 1
+Port Lawrenceland, 34
+Port Teresaborough, 201
+New Tammy, 600
+===
+
+
+
+
+
+
+
