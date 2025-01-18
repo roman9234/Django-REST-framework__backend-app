@@ -6,7 +6,7 @@ djangorestframework
 
 сохраняем
 Можно убрать все установленные библиотеки командой
-pip uninstall -r requirements.txt -y
+pip freeze > requirements.txt && pip uninstall -r requirements.txt -y
 
 устанавливаем модуль pip-tools
 pip install pip-tools
